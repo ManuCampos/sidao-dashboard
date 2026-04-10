@@ -1,0 +1,16 @@
+{
+  "version": 2,
+  "buildCommand": "npm install --break-system-packages && npm run build",
+  "outputDirectory": "dist",
+  "env": {
+    "NODE_ENV": "production"
+  },
+  "framework": "vite",
+  "installCommand": "npm install --break-system-packages",
+  "rewrites": [
+    {
+      "source": "/:path*",
+      "destination": "/index.html"
+    }
+  ]
+}
