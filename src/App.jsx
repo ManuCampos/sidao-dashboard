@@ -10,7 +10,8 @@ import {
   ChevronsLeft, ChevronsRight, BarChart2, FileText, Map, Info,
   CheckCircle, XCircle, Snowflake
 } from 'lucide-react';
-import { STATS, OUTLIERS, SERIE_TOP1, DIST_MENSAL, FATOR_SAZONAL } from './data.js';
+import { STATS, OUTLIERS, SERIE_TOP, DIST_MENSAL, FATOR_SAZONAL } from './data.js';
+const SERIE_TOP1 = SERIE_TOP[1] || SERIE_TOP["1"] || [];
 
 /* ─── constantes ─────────────────────────────────────────── */
 const MESES = {1:'Jan',2:'Fev',3:'Mar',4:'Abr',5:'Mai',6:'Jun',
@@ -30,13 +31,7 @@ const fmtPct  = v => v == null ? '—' : `${(v * 100).toFixed(1)}%`;
 const PAGE = 100;
 
 /* ─── lookups pré-calculados ─────────────────────────────── */
-const REGIOES    = ['todos',...[...new Set(OUTLIERS.map(o=>o.regiao).filter(Boolean))].sort()];
-const MUNIS_MAP  = REGIOES.reduce((a,r)=>{
-  a[r] = r==='todos'
-    ? ['todos',...[...new Set(OUTLIERS.map(o=>o.municipio))].sort()]
-    : ['todos',...[...new Set(OUTLIERS.filter(o=>o.regiao===r).map(o=>o.municipio))].sort()];
-  return a;
-},{});
+const MUNICIPIOS = ['todos',...[...new Set(OUTLIERS.map(o=>o.municipio))].sort()];
 const ANOS = ['todos',...[...new Set(OUTLIERS.map(o=>o.competencia.slice(0,4)))].sort()];
 const COMPS_MAP  = ANOS.reduce((a,ano)=>{
   if(ano==='todos'){ a[ano]=['todos']; return a; }
@@ -93,7 +88,6 @@ function SIDAO() {
   const [tab,        setTab]        = useState('triagem');
   const [selectedId, setSelectedId] = useState(null);
   const [fSev,       setFSev]       = useState('todos');
-  const [fReg,       setFReg]       = useState('todos');
   const [fMun,       setFMun]       = useState('todos');
   const [fUG,        setFUG]        = useState('todos');
   const [fAno,       setFAno]       = useState('todos');
@@ -109,7 +103,6 @@ function SIDAO() {
   const listaParaCounts = useMemo(() => {
     let d = OUTLIERS;
     if (!inclDez)       d = d.filter(o => !o.competencia.endsWith('12'));
-    if (fReg !== 'todos') d = d.filter(o => o.regiao === fReg);
     if (fMun !== 'todos') d = d.filter(o => o.municipio === fMun);
     if (fUG  !== 'todos') d = d.filter(o => o.ug.trim() === fUG);
     if (fAno !== 'todos') d = d.filter(o => o.competencia.startsWith(fAno));
@@ -123,7 +116,7 @@ function SIDAO() {
         o.ug.toLowerCase().includes(s));
     }
     return d;
-  }, [inclDez, fReg, fMun, fUG, fAno, fComp, busca]);
+  }, [inclDez, fMun, fUG, fAno, fComp, busca]);
 
   /* ── SEGUNDO: counts (para KPI cards) ── */
   const counts = useMemo(() => ({
@@ -152,9 +145,8 @@ function SIDAO() {
   const ugsFiltradas = useMemo(() => {
     let d = OUTLIERS;
     if (fMun !== 'todos') d = d.filter(o => o.municipio === fMun);
-    else if (fReg !== 'todos') d = d.filter(o => o.regiao === fReg);
     return ['todos', ...[...new Set(d.map(o => o.ug.trim()))].sort()];
-  }, [fReg, fMun]);
+  }, [fMun]);
 
   /* ── handlers ── */
   const ordenar = col => {
@@ -163,18 +155,21 @@ function SIDAO() {
     setPagina(0);
   };
   const limpar = () => {
-    setFSev('todos'); setFReg('todos'); setFMun('todos');
+    setFSev('todos'); setFMun('todos');
     setFUG('todos'); setFAno('todos'); setFComp('todos');
     setBusca(''); setPagina(0);
   };
-  const mudarReg = v => { setFReg(v); setFMun('todos'); setFUG('todos'); setPagina(0); };
   const mudarMun = v => { setFMun(v); setFUG('todos'); setPagina(0); };
   const mudarAno = v => { setFAno(v); setFComp('todos'); setPagina(0); };
 
   /* ── dados dos gráficos ── */
   const distData    = useMemo(() => {
-    const base = inclDez ? DIST_MENSAL : DIST_MENSAL.filter(d => d.mes_num !== 12);
-    return base.map(d => ({ ...d, nome: MESES[d.mes_num] }));
+    const base = (inclDez ? DIST_MENSAL : DIST_MENSAL.filter(d => !d.competencia?.endsWith('12')));
+    return base.map(d => {
+      const m = parseInt((d.competencia || '').slice(-2), 10);
+      const ano = (d.competencia || '').slice(0, 4);
+      return { ...d, mes_num: m, nome: `${MESES[m] || ''}/${ano.slice(2)}` };
+    });
   }, [inclDez]);
 
   const sazonalData = FATOR_SAZONAL.map(d => ({ nome: MESES[d.mes], fator: d.fator }));
@@ -201,7 +196,7 @@ function SIDAO() {
     </th>
   );
 
-  const filtrosAtivos = fSev !== 'todos' || fReg !== 'todos' || fMun !== 'todos' ||
+  const filtrosAtivos = fSev !== 'todos' || fMun !== 'todos' ||
     fUG !== 'todos' || fAno !== 'todos' || fComp !== 'todos' || busca.trim();
 
   /* ══════════════════════════════════════════════════════════ */
@@ -330,14 +325,9 @@ function SIDAO() {
                     <option key={c} value={c}>{fmtComp(c)}</option>)}
                 </Select>
 
-                <Select value={fReg} onChange={mudarReg}>
-                  <option value="todos">Todas as Regiões</option>
-                  {REGIOES.filter(r => r !== 'todos').map(r => <option key={r} value={r}>{r}</option>)}
-                </Select>
-
                 <Select value={fMun} onChange={mudarMun}>
                   <option value="todos">Todos os Municípios</option>
-                  {(MUNIS_MAP[fReg] || MUNIS_MAP['todos']).filter(m => m !== 'todos').map(m =>
+                  {MUNICIPIOS.filter(m => m !== 'todos').map(m =>
                     <option key={m} value={m}>{m}</option>)}
                 </Select>
 
@@ -493,7 +483,6 @@ function SIDAO() {
                         <Badge sev={sel.severidade} />
                         <span className="text-xs text-gray-400">Score: <strong className="text-gray-700">{sel.score_total.toFixed(0)}/100</strong></span>
                         <span className="text-xs text-gray-400">· Comp: <strong className="text-gray-700">{fmtComp(sel.competencia)}</strong></span>
-                        <span className="text-xs text-gray-400">· {sel.regiao}</span>
                       </div>
                       <h2 className="text-xl font-bold text-gray-900">{sel.municipio}</h2>
                       <p className="text-sm text-gray-500 mt-0.5 flex items-center gap-1">
